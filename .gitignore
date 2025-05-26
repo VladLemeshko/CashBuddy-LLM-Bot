@@ -1,0 +1,25 @@
+# Виртуальное окружение
+venv/
+
+# Кэш Python
+__pycache__/
+*.pyc
+
+# Базы данных и временные файлы
+*.db
+*.sqlite3
+*.log
+*.png
+
+# Файлы среды и секреты
+.env
+.env.*
+
+# Jupyter и IDE
+.ipynb_checkpoints/
+.idea/
+.vscode/
+
+# Системные файлы
+.DS_Store
+Thumbs.db 
