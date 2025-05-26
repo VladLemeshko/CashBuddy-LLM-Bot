@@ -49,7 +49,7 @@ finance-assistant/
 1. **Клонируйте репозиторий и перейдите в папку проекта:**
    ```bash
    git clone <repo-url>
-   cd finance-assistant
+   cd CashBuddy-LLM-Bot
    ```
 2. **Создайте и активируйте виртуальное окружение:**
    ```bash
