@@ -48,7 +48,7 @@ finance-assistant/
 
 1. **Клонируйте репозиторий и перейдите в папку проекта:**
    ```bash
-   git clone <repo-url>
+   git clone https://github.com/VladLemeshko/CashBuddy-LLM-Bot.git
    cd CashBuddy-LLM-Bot
    ```
 2. **Создайте и активируйте виртуальное окружение:**
