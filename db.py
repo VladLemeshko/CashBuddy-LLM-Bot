@@ -29,9 +29,21 @@ async def init_db():
                 goal_name TEXT,
                 target_amount REAL,
                 current_amount REAL DEFAULT 0,
-                deadline DATE,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY(user_id) REFERENCES users(user_id)
+                deadline TEXT,
+                period TEXT DEFAULT 'ежемесячно',
+                strategy_value REAL DEFAULT 0,
+                priority INTEGER DEFAULT 1,
+                created_at TEXT DEFAULT (datetime('now'))
+            )
+        ''')
+        await db.execute('''
+            CREATE TABLE IF NOT EXISTS goal_deposits (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                goal_id INTEGER,
+                user_id INTEGER,
+                amount REAL,
+                date TEXT,
+                source TEXT
             )
         ''')
         await db.commit()

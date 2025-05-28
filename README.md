@@ -70,7 +70,7 @@ finance-assistant/
    - Убедитесь, что у вас достаточно оперативной памяти и установлен PyTorch с поддержкой вашей видеокарты (или используйте CPU, если GPU нет).
    - Запустите сервис:
      ```bash
-     uvicorn local_llm_api:app --host 0.0.0.0 --port 8000
+     uvicorn local_llm_api:app --host 0.0.0.0 --port 8000 > llm.log 2>&1 &
      ```
    - Проверьте, что сервис работает: [http://localhost:8000/docs](http://localhost:8000/docs)
 6. **Запустите бота:**

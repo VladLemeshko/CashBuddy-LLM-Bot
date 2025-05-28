@@ -14,16 +14,17 @@ HF_TOKEN = os.getenv("HF_TOKEN")
 MODEL = "meta-llama/Llama-2-7b-chat-hf"
 
 async def ask_agent(user_history: str, user_goals: str, question: str) -> str:
-    prompt = (
-        "Ты — персональный финансовый агент. Вот история пользователя (доходы, расходы):\n"
-        f"{user_history}\n"
-        "Вот его финансовые цели:\n"
-        f"{user_goals}\n"
-        f"Вопрос пользователя: {question}\n"
-        "Ответь максимально полезно, персонализировано и понятно."
-    )
-    data = {"prompt": prompt}
-    logger.info("[LLM] PROMPT отправлен в локальный LLM:\n%s", prompt)
+    """
+    user_history: последние транзакции (текст)
+    user_goals: теперь это полный user_context (баланс, цели, траты по категориям)
+    question: вопрос пользователя
+    """
+    data = {
+        "user_history": user_history,
+        "user_goals": user_goals,
+        "question": question
+    }
+    logger.info("[LLM] PROMPT (chat template) отправлен в локальный LLM:\n%s", data)
     try:
         async with httpx.AsyncClient() as client:
             response = await client.post(LOCAL_LLM_URL, json=data, timeout=300)

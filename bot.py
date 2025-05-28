@@ -6,7 +6,7 @@ from aiogram.filters import Command
 from aiogram.types import Message
 from dotenv import load_dotenv
 from db import init_db
-from handlers import router as main_router
+from handlers import routers
 from keyboards import main_menu
 
 load_dotenv(".env")
@@ -27,7 +27,8 @@ async def cmd_start(message: Message):
 
 async def main():
     await init_db()
-    dp.include_router(main_router)
+    for r in routers:
+        dp.include_router(r)
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
