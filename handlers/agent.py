@@ -50,6 +50,33 @@ async def stop_agent_chat(call: CallbackQuery, state: FSMContext):
 
 async def build_user_context(user_id):
     async with aiosqlite.connect(DB_PATH) as db:
+        # Финансовый профиль
+        cursor = await db.execute("SELECT income_type, monthly_income, has_deposits, deposit_interest, deposit_amount, has_loans, loans_total, loans_interest, has_investments, investments_amount, investments_profit, financial_mood FROM user_profiles WHERE user_id=?", (user_id,))
+        profile = await cursor.fetchone()
+        profile_text = ""
+        if profile:
+            income_type, monthly_income, has_deposits, deposit_interest, deposit_amount, has_loans, loans_total, loans_interest, has_investments, investments_amount, investments_profit, financial_mood = profile
+            profile_text = (
+                f"<b>Профиль пользователя:</b>\n"
+                f"• Источник дохода: {income_type or '—'}\n"
+                f"• Доход в месяц: {monthly_income if monthly_income is not None else '—'}₽\n"
+                f"• Вклады: {'Да' if has_deposits else 'Нет'}"
+            )
+            if has_deposits:
+                profile_text += f" ({deposit_interest or '—'}% годовых, {deposit_amount or '—'}₽)\n"
+            else:
+                profile_text += "\n"
+            profile_text += f"• Кредиты: {'Да' if has_loans else 'Нет'}"
+            if has_loans:
+                profile_text += f" ({loans_total or '—'}₽, {loans_interest or '—'}% годовых)\n"
+            else:
+                profile_text += "\n"
+            profile_text += f"• Инвестиции: {'Да' if has_investments else 'Нет'}"
+            if has_investments:
+                profile_text += f" ({investments_amount or '—'}₽, доходность {investments_profit or '—'}%)\n"
+            else:
+                profile_text += "\n"
+            profile_text += f"• Финансовое настроение: {financial_mood or '—'}\n\n"
         # Баланс
         cursor = await db.execute("SELECT SUM(CASE WHEN type='income' THEN amount ELSE -amount END) FROM transactions WHERE user_id=?", (user_id,))
         row = await cursor.fetchone()
@@ -69,6 +96,7 @@ async def build_user_context(user_id):
             cat_name = EXPENSE_CATEGORIES.get(cat, cat)
             expenses_text += f"{cat_name}: {amt:.0f}₽\n"
     context = (
+        (profile_text or "") +
         f"Баланс: {balance:.2f}₽\n"
         f"Цели:\n{goals_text or 'Нет целей'}\n"
         f"Траты по категориям:\n{expenses_text or 'Нет трат'}"

@@ -18,13 +18,6 @@ logging.basicConfig(level=logging.INFO)
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
-@dp.message(Command("start"))
-async def cmd_start(message: Message):
-    await message.answer(
-        "👋 Привет! Я — твой финансовый помощник. Помогу вести учёт доходов и расходов, анализировать траты и достигать финансовых целей!\n\nИспользуй меню для начала работы.",
-        reply_markup=main_menu
-    )
-
 async def main():
     await init_db()
     for r in routers:

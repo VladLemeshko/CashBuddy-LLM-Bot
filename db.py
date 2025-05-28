@@ -46,4 +46,23 @@ async def init_db():
                 source TEXT
             )
         ''')
+        await db.execute('''
+            CREATE TABLE IF NOT EXISTS user_profiles (
+                user_id INTEGER PRIMARY KEY,
+                income_type TEXT,
+                monthly_income REAL,
+                has_deposits INTEGER,
+                deposit_interest REAL,
+                deposit_amount REAL,
+                has_loans INTEGER,
+                loans_total REAL,
+                loans_interest REAL,
+                has_investments INTEGER,
+                investments_amount REAL,
+                investments_profit REAL,
+                financial_mood TEXT,
+                family_size INTEGER,
+                FOREIGN KEY(user_id) REFERENCES users(user_id)
+            )
+        ''')
         await db.commit()
