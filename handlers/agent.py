@@ -38,10 +38,7 @@ async def agent_dialog(message: Message, state: FSMContext):
     user_context = await build_user_context(user_id)
     answer = await ask_agent(history, user_context, message.text)
     answer = beautify_answer(answer)
-    stop_kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🛑 Остановить чат", callback_data="stop_agent_chat")]
-    ])
-    await message.answer(f"<b>🤖 Агент:</b>\n{answer}", parse_mode="HTML", reply_markup=stop_kb)
+    await message.answer(f"<b>🤖 Агент:</b>\n{answer}", parse_mode="HTML")
 
 @router.callback_query(F.data == "stop_agent_chat", AgentDialogState.active)
 async def stop_agent_chat(call: CallbackQuery, state: FSMContext):

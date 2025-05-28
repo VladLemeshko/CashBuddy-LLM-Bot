@@ -34,6 +34,14 @@ async def generate(request: Request):
         "Пиши развернуто, с примерами, объясняй свои советы, используй эмодзи, поддерживай пользователя, не ограничивайся одним предложением."
     )})
     input_ids = tokenizer.apply_chat_template(messages, tokenize=True, return_tensors="pt").to(model.device)
-    outputs = model.generate(input_ids, max_new_tokens=768, pad_token_id=tokenizer.eos_token_id)
+    outputs = model.generate(
+        input_ids,
+        max_new_tokens=768,
+        pad_token_id=tokenizer.eos_token_id,
+        temperature=0.7,         # степень креативности
+        top_p=0.9,               # сэмплирование по вероятности
+        top_k=50,                # сэмплирование по топ-k
+        repetition_penalty=1.1   # штраф за повторения
+    )
     answer = tokenizer.decode(outputs[0][input_ids.size(1):], skip_special_tokens=True)
     return {"answer": answer}
