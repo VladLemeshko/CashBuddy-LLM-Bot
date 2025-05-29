@@ -9,3 +9,6 @@ torch
 protobuf
 sentencepiece
 matplotlib
+pandas
+selenium
+webdriver-manager

@@ -52,8 +52,11 @@ async def init_db():
                 income_type TEXT,
                 monthly_income REAL,
                 has_deposits INTEGER,
+                deposit_bank TEXT,
                 deposit_interest REAL,
                 deposit_amount REAL,
+                deposit_term TEXT,
+                deposit_date TEXT,
                 has_loans INTEGER,
                 loans_total REAL,
                 loans_interest REAL,
@@ -61,7 +64,8 @@ async def init_db():
                 investments_amount REAL,
                 investments_profit REAL,
                 financial_mood TEXT,
-                family_size INTEGER,
+                has_regular_payments INTEGER,
+                regular_payments_list TEXT,
                 FOREIGN KEY(user_id) REFERENCES users(user_id)
             )
         ''')

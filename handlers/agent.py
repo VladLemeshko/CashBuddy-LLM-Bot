@@ -9,6 +9,7 @@ import aiosqlite
 from aiogram.fsm.state import StatesGroup, State
 from db import DB_PATH
 from aiogram.types import CallbackQuery
+from tools.deposit_parser import get_best_deposits
 
 router = Router()
 
@@ -48,11 +49,16 @@ async def stop_agent_chat(call: CallbackQuery, state: FSMContext):
 async def build_user_context(user_id):
     async with aiosqlite.connect(DB_PATH) as db:
         # Финансовый профиль
-        cursor = await db.execute("SELECT income_type, monthly_income, has_deposits, deposit_interest, deposit_amount, has_loans, loans_total, loans_interest, has_investments, investments_amount, investments_profit, financial_mood FROM user_profiles WHERE user_id=?", (user_id,))
+        cursor = await db.execute("SELECT income_type, monthly_income, has_deposits, deposit_bank, deposit_interest, deposit_amount, deposit_term, deposit_date, has_loans, loans_total, loans_interest, has_investments, investments_amount, investments_profit, financial_mood, has_regular_payments, regular_payments_list FROM user_profiles WHERE user_id=?", (user_id,))
         profile = await cursor.fetchone()
         profile_text = ""
+        deposit_analysis = ""
         if profile:
-            income_type, monthly_income, has_deposits, deposit_interest, deposit_amount, has_loans, loans_total, loans_interest, has_investments, investments_amount, investments_profit, financial_mood = profile
+            (
+                income_type, monthly_income, has_deposits, deposit_bank, deposit_interest, deposit_amount, deposit_term, deposit_date,
+                has_loans, loans_total, loans_interest, has_investments, investments_amount, investments_profit, financial_mood,
+                has_regular_payments, regular_payments_list
+            ) = profile
             profile_text = (
                 f"<b>Профиль пользователя:</b>\n"
                 f"• Источник дохода: {income_type or '—'}\n"
@@ -60,7 +66,18 @@ async def build_user_context(user_id):
                 f"• Вклады: {'Да' if has_deposits else 'Нет'}"
             )
             if has_deposits:
-                profile_text += f" ({deposit_interest or '—'}% годовых, {deposit_amount or '—'}₽)\n"
+                profile_text += f"\n  Банк: {deposit_bank or '—'}\n  Ставка: {deposit_interest or '—'}%\n  Сумма: {deposit_amount or '—'}₽\n  Срок: {deposit_term or '—'}\n  Дата открытия: {deposit_date or '—'}\n"
+                # Сравнение с топ-5 рыночными вкладами
+                try:
+                    best_deposits = get_best_deposits()
+                    best = sorted(best_deposits, key=lambda d: float(str(d['Доходность']).replace('%','').replace(',','.')), reverse=True)[:5]
+                    deposits_block = "<b>Топ-5 вкладов на рынке:</b>\n"
+                    for i, d in enumerate(best, 1):
+                        deposits_block += f"{i}. {d['Банк']} — {d['Доходность']}, {d['Срок']}, мин. {d['Мин. сумма']}\n"
+                    deposit_analysis = (f"\n{deposits_block}\n"
+                        "Сравни мой вклад с этими предложениями и дай совет: где условия лучше, стоит ли менять вклад, на что обратить внимание.\n")
+                except Exception as e:
+                    deposit_analysis = ""
             else:
                 profile_text += "\n"
             profile_text += f"• Кредиты: {'Да' if has_loans else 'Нет'}"
@@ -94,6 +111,7 @@ async def build_user_context(user_id):
             expenses_text += f"{cat_name}: {amt:.0f}₽\n"
     context = (
         (profile_text or "") +
+        (deposit_analysis or "") +
         f"Баланс: {balance:.2f}₽\n"
         f"Цели:\n{goals_text or 'Нет целей'}\n"
         f"Траты по категориям:\n{expenses_text or 'Нет трат'}"

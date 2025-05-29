@@ -13,12 +13,18 @@ class ProfileSurvey(StatesGroup):
     waiting_for_income_type = State()
     waiting_for_monthly_income = State()
     waiting_for_has_deposits = State()
-    waiting_for_deposit_details = State()
+    waiting_for_deposit_bank = State()
+    waiting_for_deposit_interest = State()
+    waiting_for_deposit_amount = State()
+    waiting_for_deposit_term = State()
+    waiting_for_deposit_date = State()
     waiting_for_has_loans = State()
     waiting_for_loans_details = State()
     waiting_for_has_investments = State()
     waiting_for_investments_details = State()
     waiting_for_financial_mood = State()
+    waiting_for_regular_payments = State()
+    waiting_for_regular_payments_details = State()
 
 # Клавиатуры
 start_survey_kb = ReplyKeyboardMarkup(
@@ -98,33 +104,56 @@ async def has_deposits_q(message: types.Message, state: FSMContext):
     has_deposits = 1 if message.text == "Да" else 0
     await state.update_data(has_deposits=has_deposits)
     if has_deposits:
-        await message.answer("🏦 Какой процент годовых по твоим основным вкладам/накоплениям?\n(Напиши число, например: 7.5)", reply_markup=ReplyKeyboardRemove())
-        await state.set_state(ProfileSurvey.waiting_for_deposit_details)
+        await message.answer("🏦 В каком банке у тебя открыт вклад?")
+        await state.set_state(ProfileSurvey.waiting_for_deposit_bank)
     else:
-        await state.update_data(deposit_interest=None, deposit_amount=None)
+        await state.update_data(
+            deposit_bank=None,
+            deposit_interest=None,
+            deposit_amount=None,
+            deposit_term=None,
+            deposit_date=None
+        )
         await message.answer("4️⃣ Есть ли у тебя кредиты, рассрочки или долги?\n(Это поможет мне оценить твою кредитную нагрузку 🏦)", reply_markup=has_loans_kb)
         await state.set_state(ProfileSurvey.waiting_for_has_loans)
 
-@router.message(ProfileSurvey.waiting_for_deposit_details)
-async def deposit_details_q(message: types.Message, state: FSMContext):
-    data = await state.get_data()
-    if data.get('deposit_interest') is None:
-        # Ждём процент
-        try:
-            percent = float(message.text.replace(',', '.'))
-            await state.update_data(deposit_interest=percent)
-            await message.answer("💵 Какой общий объём накоплений/вкладов?\n(В рублях, например: 100000)")
-        except ValueError:
-            await message.answer("Пожалуйста, введи процент числом, например: 7.5")
-    else:
-        # Ждём сумму
-        try:
-            amount = float(message.text.replace(',', '.'))
-            await state.update_data(deposit_amount=amount)
-            await message.answer("4️⃣ Есть ли у тебя кредиты, рассрочки или долги?\n(Это поможет мне оценить твою кредитную нагрузку 🏦)", reply_markup=has_loans_kb)
-            await state.set_state(ProfileSurvey.waiting_for_has_loans)
-        except ValueError:
-            await message.answer("Пожалуйста, введи сумму числом, например: 100000")
+@router.message(ProfileSurvey.waiting_for_deposit_bank)
+async def deposit_bank_q(message: types.Message, state: FSMContext):
+    await state.update_data(deposit_bank=message.text)
+    await message.answer("📈 Какой процент по вкладу?")
+    await state.set_state(ProfileSurvey.waiting_for_deposit_interest)
+
+@router.message(ProfileSurvey.waiting_for_deposit_interest)
+async def deposit_interest_q(message: types.Message, state: FSMContext):
+    try:
+        percent = float(message.text.replace(',', '.'))
+        await state.update_data(deposit_interest=percent)
+        await message.answer("💵 Какая сумма на вкладе?")
+        await state.set_state(ProfileSurvey.waiting_for_deposit_amount)
+    except ValueError:
+        await message.answer("Пожалуйста, введи процент числом, например: 7.5")
+
+@router.message(ProfileSurvey.waiting_for_deposit_amount)
+async def deposit_amount_q(message: types.Message, state: FSMContext):
+    try:
+        amount = float(message.text.replace(',', '.'))
+        await state.update_data(deposit_amount=amount)
+        await message.answer("⏳ На какой срок открыт вклад? (например, 6 месяцев, 1 год)")
+        await state.set_state(ProfileSurvey.waiting_for_deposit_term)
+    except ValueError:
+        await message.answer("Пожалуйста, введи сумму числом, например: 100000")
+
+@router.message(ProfileSurvey.waiting_for_deposit_term)
+async def deposit_term_q(message: types.Message, state: FSMContext):
+    await state.update_data(deposit_term=message.text)
+    await message.answer("📅 Когда ты открыл вклад? (или когда он заканчивается)")
+    await state.set_state(ProfileSurvey.waiting_for_deposit_date)
+
+@router.message(ProfileSurvey.waiting_for_deposit_date)
+async def deposit_date_q(message: types.Message, state: FSMContext):
+    await state.update_data(deposit_date=message.text)
+    await message.answer("4️⃣ Есть ли у тебя кредиты, рассрочки или долги?\n(Это поможет мне оценить твою кредитную нагрузку 🏦)", reply_markup=has_loans_kb)
+    await state.set_state(ProfileSurvey.waiting_for_has_loans)
 
 # 4. Кредиты/долги
 @router.message(ProfileSurvey.waiting_for_has_loans)
@@ -196,30 +225,54 @@ async def investments_details_q(message: types.Message, state: FSMContext):
 @router.message(ProfileSurvey.waiting_for_financial_mood)
 async def financial_mood_q(message: types.Message, state: FSMContext):
     await state.update_data(financial_mood=message.text)
+    await message.answer("Есть ли у тебя регулярные платежи (ЖКХ, интернет, кредиты и т.д.)?", reply_markup=has_deposits_kb)
+    await state.set_state(ProfileSurvey.waiting_for_regular_payments)
+
+@router.message(ProfileSurvey.waiting_for_regular_payments)
+async def has_regular_payments_q(message: types.Message, state: FSMContext):
+    has_payments = 1 if message.text == "Да" else 0
+    await state.update_data(has_regular_payments=has_payments)
+    if has_payments:
+        await message.answer("Перечисли, пожалуйста, свои регулярные платежи через запятую (например: ЖКХ, интернет, кредит, аренда)")
+        await state.set_state(ProfileSurvey.waiting_for_regular_payments_details)
+    else:
+        await state.update_data(regular_payments_list=None)
+        await finish_profile_survey(message, state)
+
+@router.message(ProfileSurvey.waiting_for_regular_payments_details)
+async def regular_payments_details_q(message: types.Message, state: FSMContext):
+    await state.update_data(regular_payments_list=message.text)
+    await finish_profile_survey(message, state)
+
+async def finish_profile_survey(message, state):
     data = await state.get_data()
     user_id = message.from_user.id
-    # Сохраняем в БД
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute('''
             INSERT OR REPLACE INTO user_profiles (
-                user_id, income_type, monthly_income, has_deposits, deposit_interest, deposit_amount,
-                has_loans, loans_total, loans_interest, has_investments, investments_amount, investments_profit,
-                financial_mood
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                user_id, income_type, monthly_income, has_deposits, deposit_bank, deposit_interest, deposit_amount,
+                deposit_term, deposit_date, has_loans, loans_total, loans_interest, has_investments, investments_amount, investments_profit,
+                financial_mood, has_regular_payments, regular_payments_list
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
             user_id,
             data.get('income_type'),
             data.get('monthly_income'),
             data.get('has_deposits'),
+            data.get('deposit_bank'),
             data.get('deposit_interest'),
             data.get('deposit_amount'),
+            data.get('deposit_term'),
+            data.get('deposit_date'),
             data.get('has_loans'),
             data.get('loans_total'),
             data.get('loans_interest'),
             data.get('has_investments'),
             data.get('investments_amount'),
             data.get('investments_profit'),
-            data.get('financial_mood')
+            data.get('financial_mood'),
+            data.get('has_regular_payments'),
+            data.get('regular_payments_list')
         ))
         await db.commit()
     await message.answer("🎉 Спасибо! Профиль заполнен. Теперь я смогу давать тебе более точные и полезные советы! 😊\n\nЧтобы начать пользоваться ботом, нажми /menu", reply_markup=ReplyKeyboardRemove())
