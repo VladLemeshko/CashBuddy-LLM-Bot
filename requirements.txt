@@ -12,3 +12,7 @@ matplotlib
 pandas
 selenium
 webdriver-manager
+requests
+yfinance
+beautifulsoup4
+numpy

@@ -18,4 +18,14 @@ class AskAgentState(StatesGroup):
 
 class GoalDepositStates(StatesGroup):
     waiting_for_goal = State()
-    waiting_for_amount = State() 
+    waiting_for_amount = State()
+
+class CreditStates(StatesGroup):
+    age = State()
+    marital = State()
+    housing = State()
+    loan = State()
+    job = State()
+    education = State()
+    duration = State()
+    campaign = State() 

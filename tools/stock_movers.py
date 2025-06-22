@@ -3,15 +3,18 @@ import requests
 from bs4 import BeautifulSoup
 
 def get_top_us_movers(tickers, count=5):
-    tickers_str = ' '.join(tickers)
-    stocks = yf.Tickers(tickers_str)
     movers = []
-    for ticker in stocks.tickers:
-        hist = ticker.history(period="2d")
-        if len(hist) < 2:
+    for ticker_symbol in tickers:
+        try:
+            ticker = yf.Ticker(ticker_symbol)
+            hist = ticker.history(period="2d")
+            if len(hist) < 2:
+                continue
+            change = (hist['Close'].iloc[-1] - hist['Close'].iloc[-2]) / hist['Close'].iloc[-2] * 100
+            movers.append((ticker_symbol, float(change)))
+        except Exception as e:
+            print(f"Ошибка при получении данных для {ticker_symbol}: {e}")
             continue
-        change = (hist['Close'][-1] - hist['Close'][-2]) / hist['Close'][-2] * 100
-        movers.append((ticker.ticker, change))
     movers.sort(key=lambda x: abs(x[1]), reverse=True)
     return movers[:count]
 

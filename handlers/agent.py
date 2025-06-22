@@ -47,6 +47,14 @@ async def stop_agent_chat(call: CallbackQuery, state: FSMContext):
     await call.message.edit_text("❌ Диалог с агентом завершён.", reply_markup=main_menu)
 
 async def build_user_context(user_id):
+    import sys
+    sys.path.append("./tools")
+    from tools.crypto_rates import get_crypto_rates
+    from tools.stock_movers import get_top_us_movers, get_top_ru_movers
+    from tools.deposit_parser import get_best_deposits
+    import asyncio
+    import concurrent.futures
+    
     async with aiosqlite.connect(DB_PATH) as db:
         # Финансовый профиль
         cursor = await db.execute("SELECT income_type, monthly_income, has_deposits, deposit_bank, deposit_interest, deposit_amount, deposit_term, deposit_date, has_loans, loans_total, loans_interest, has_investments, investments_amount, investments_profit, financial_mood, has_regular_payments, regular_payments_list FROM user_profiles WHERE user_id=?", (user_id,))
@@ -109,11 +117,56 @@ async def build_user_context(user_id):
         for cat, amt in rows:
             cat_name = EXPENSE_CATEGORIES.get(cat, cat)
             expenses_text += f"{cat_name}: {amt:.0f}₽\n"
+        
+        # Кредитные заявки
+        cursor = await db.execute("SELECT age, marital_status, housing, loan, job_category, education, duration, campaign, credit_probability, created_at FROM credit_applications WHERE user_id=? ORDER BY created_at DESC LIMIT 3", (user_id,))
+        credit_applications = await cursor.fetchall()
+        credit_text = ""
+        if credit_applications:
+            credit_text = "\n<b>Кредитные заявки:</b>\n"
+            for i, app in enumerate(credit_applications, 1):
+                age, marital, housing, loan, job, education, amount, term, prob, date = app
+                marital_text = "Женат/замужем" if marital else "Холост/не замужем"
+                housing_text = "Да" if housing else "Нет"
+                loan_text = "Да" if loan else "Нет"
+                credit_text += f"{i}. {date[:10]}: {prob}% одобрения\n"
+                credit_text += f"   Возраст: {age}, {marital_text}, Жилье: {housing_text}\n"
+                credit_text += f"   Профессия: {job}, Образование: {education}\n"
+                credit_text += f"   Сумма: {amount:,}₽, Срок: {term} мес.\n\n"
+    # --- ДОБАВЛЯЕМ АКТУАЛЬНЫЕ ДАННЫЕ РЫНКА ---
+    def get_market_data_sync():
+        crypto = get_crypto_rates()
+        us = get_top_us_movers(["AAPL", "MSFT", "GOOGL", "AMZN", "TSLA"], 3)
+        ru = get_top_ru_movers(3)
+        deposits = get_best_deposits()
+        return crypto, us, ru, deposits
+    loop = asyncio.get_event_loop()
+    with concurrent.futures.ThreadPoolExecutor() as pool:
+        crypto, us, ru, deposits = await loop.run_in_executor(pool, get_market_data_sync)
+    # Формируем текст для LLM
+    market_text = "\n<b>Актуальные данные рынка:</b>\n"
+    market_text += "\n<b>Курсы криптовалют:</b>\n"
+    for c in crypto:
+        market_text += f"• {c['name']}: ${c['usd']} (₽{c['rub']})\n"
+    market_text += "\n<b>Топ-3 акции США:</b>\n"
+    for ticker, change in us:
+        emoji = "🟢" if change > 0 else "🔴"
+        market_text += f"• {emoji} {ticker}: {change:+.2f}%\n"
+    market_text += "\n<b>Топ-3 акции РФ:</b>\n"
+    for ticker, change in ru:
+        emoji = "🟢" if change > 0 else "🔴"
+        market_text += f"• {emoji} {ticker}: {change:+.2f}%\n"
+    market_text += "\n<b>Лучшие вклады:</b>\n"
+    for d in deposits[:3]:
+        market_text += f"• {d['Банк']}: {d['Доходность']}, {d['Срок']}, мин. {d['Мин. сумма']}\n"
+    # ---
     context = (
         (profile_text or "") +
         (deposit_analysis or "") +
         f"Баланс: {balance:.2f}₽\n"
         f"Цели:\n{goals_text or 'Нет целей'}\n"
-        f"Траты по категориям:\n{expenses_text or 'Нет трат'}"
+        f"Траты по категориям:\n{expenses_text or 'Нет трат'}\n"
+        + credit_text
+        + market_text
     )
     return context 
