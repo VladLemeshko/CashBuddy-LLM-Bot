@@ -22,4 +22,7 @@ __pycache__/
 
 # Системные файлы
 .DS_Store
-Thumbs.db 
+Thumbs.db
+
+# Автоматически генерируемые файлы
+sravni_vklady_static.html 
