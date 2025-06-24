@@ -19,14 +19,45 @@ class AgentDialogState(StatesGroup):
 @router.message(F.text == "🤖 Агент")
 async def start_agent_dialog(message: Message, state: FSMContext):
     await state.set_state(AgentDialogState.active)
-    await message.answer("Вы в диалоге с финансовым агентом! Просто напишите свой вопрос или опишите ситуацию. Для выхода отправьте 'Отмена'.")
+    await message.answer("Вы в диалоге с финансовым агентом! Просто напишите свой вопрос или опишите ситуацию. Для выхода отправьте 'Отмена' или нажмите любую кнопку главного меню.")
 
 @router.message(AgentDialogState.active)
 async def agent_dialog(message: Message, state: FSMContext):
-    if message.text.lower() == "отмена":
+    if (message.text.lower() == "отмена" or 
+        message.text == "➕ Добавить доход" or
+        message.text == "➖ Добавить расход" or
+        message.text == "💰 Баланс" or
+        message.text == "📊 Отчёт" or
+        message.text == "🎯 Цели" or
+        message.text == "📈 Инвестиции" or
+        message.text == "💳 Кредиты"):
         await state.clear()
         await message.answer("❌ Диалог с агентом завершён.", reply_markup=main_menu)
+        
+        # Вызываем соответствующие обработчики
+        if message.text == "➕ Добавить доход":
+            from .transactions import add_income_start
+            await add_income_start(message, state)
+        elif message.text == "➖ Добавить расход":
+            from .transactions import add_expense_start
+            await add_expense_start(message, state)
+        elif message.text == "💰 Баланс":
+            from .report import show_balance
+            await show_balance(message)
+        elif message.text == "📊 Отчёт":
+            from .report import show_report
+            await show_report(message)
+        elif message.text == "🎯 Цели":
+            from .goals import show_goals
+            await show_goals(message, state)
+        elif message.text == "📈 Инвестиции":
+            from .investments import investments_menu_handler
+            await investments_menu_handler(message)
+        elif message.text == "💳 Кредиты":
+            from .credits import credits_menu
+            await credits_menu(message, state)
         return
+        
     user_id = message.from_user.id
     # Формируем историю транзакций с датами
     async with aiosqlite.connect(DB_PATH) as db:

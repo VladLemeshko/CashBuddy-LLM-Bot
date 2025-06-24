@@ -10,6 +10,22 @@ from db import save_credit_application, get_user_credit_history
 router = Router()
 logger = logging.getLogger(__name__)
 
+def get_menu_with_back_keyboard():
+    """Клавиатура с кнопкой возврата в главное меню"""
+    return ReplyKeyboardMarkup(
+        keyboard=[
+            [KeyboardButton(text="🏠 Вернуться в главное меню")]
+        ],
+        resize_keyboard=True
+    )
+
+@router.message(F.text == "🏠 Вернуться в главное меню")
+async def return_to_main_menu(message: types.Message, state: FSMContext):
+    """Возврат в главное меню из любого состояния"""
+    from keyboards.main_menu import main_menu
+    await state.clear()
+    await message.answer("🏠 Вы вернулись в главное меню", reply_markup=main_menu)
+
 def calculate_credit_probability(inputs):
     """Расчет вероятности одобрения кредита по модели"""
     logit = -0.596662 + \
@@ -50,8 +66,6 @@ def get_selected_education(inputs):
         return 'Высшее'
     elif inputs.get('_secondary'):
         return 'Среднее'
-    elif inputs.get('_basic'):
-        return 'Базовое'
     return 'Не указано'
 
 @router.message(F.text == "💳 Кредиты")
@@ -77,7 +91,8 @@ async def start_credit_survey(message: types.Message, state: FSMContext):
     await state.set_state(CreditStates.age)
     await message.answer(
         "📝 Новая кредитная заявка\n\n"
-        "Введите ваш возраст:"
+        "Введите ваш возраст:",
+        reply_markup=get_menu_with_back_keyboard()
     )
 
 @router.message(F.text == "📊 История заявок")
@@ -91,9 +106,13 @@ async def show_credit_history(message: types.Message, state: FSMContext):
     
     response = "📊 История ваших кредитных заявок:\n\n"
     for i, record in enumerate(history[:5], 1):  # Показываем последние 5 заявок
-        response += f"{i}. Дата: {record[11]}\n"
-        response += f"   Вероятность одобрения: {record[10]}%\n"
-        response += f"   Возраст: {record[2]}, Профессия: {record[6]}\n\n"
+        response += f"{i}. Дата: {record[12]}\n"
+        response += f"   Вероятность одобрения: {record[11]}%\n"
+        response += f"   Возраст: {record[2]}, Профессия: {record[6]}\n"
+        if len(record) > 10 and record[10]:  # loan_amount
+            response += f"   Сумма: {record[10]:,.0f}₽, Срок: {record[8]} мес.\n"
+            response += f"   Первый кредит в жизни: {'Да' if record[9] == 0 else 'Нет'}\n"
+        response += "\n"
     
     await message.answer(response)
 
@@ -107,6 +126,10 @@ async def back_to_main_menu(message: types.Message, state: FSMContext):
 @router.message(CreditStates.age)
 async def process_age(message: types.Message, state: FSMContext):
     """Обрабатывает возраст"""
+    if message.text == "🏠 Вернуться в главное меню":
+        await return_to_main_menu(message, state)
+        return
+    
     try:
         age = int(message.text)
         if age < 18 or age > 100:
@@ -117,7 +140,8 @@ async def process_age(message: types.Message, state: FSMContext):
         
         keyboard = ReplyKeyboardMarkup(
             keyboard=[
-                [KeyboardButton(text="Женат/замужем"), KeyboardButton(text="Холост/не замужем")]
+                [KeyboardButton(text="Женат/замужем"), KeyboardButton(text="Холост/не замужем")],
+                [KeyboardButton(text="🏠 Вернуться в главное меню")]
             ],
             resize_keyboard=True
         )
@@ -132,17 +156,22 @@ async def process_age(message: types.Message, state: FSMContext):
 @router.message(CreditStates.marital)
 async def process_marital(message: types.Message, state: FSMContext):
     """Обрабатывает семейное положение"""
+    if message.text == "🏠 Вернуться в главное меню":
+        await return_to_main_menu(message, state)
+        return
+    
     marital = 1 if message.text == "Женат/замужем" else 0
     await state.update_data(marital=marital)
     
     keyboard = ReplyKeyboardMarkup(
         keyboard=[
-            [KeyboardButton(text="Да"), KeyboardButton(text="Нет")]
+            [KeyboardButton(text="Да"), KeyboardButton(text="Нет")],
+            [KeyboardButton(text="🏠 Вернуться в главное меню")]
         ],
         resize_keyboard=True
     )
     await message.answer(
-        'Есть ли у вас ипотека или жилье в собственности?',
+        'Есть ли у вас сейчас действующие кредиты (например, ипотека, автокредит, кредитная карта и т.д.)?\n(Если все кредиты уже погашены — отвечайте "Нет")',
         reply_markup=keyboard
     )
     await state.set_state(CreditStates.housing)
@@ -150,17 +179,22 @@ async def process_marital(message: types.Message, state: FSMContext):
 @router.message(CreditStates.housing)
 async def process_housing(message: types.Message, state: FSMContext):
     """Обрабатывает наличие жилья"""
+    if message.text == "🏠 Вернуться в главное меню":
+        await return_to_main_menu(message, state)
+        return
+    
     housing = 1 if message.text == "Да" else 0
     await state.update_data(housing=housing)
     
     keyboard = ReplyKeyboardMarkup(
         keyboard=[
-            [KeyboardButton(text="Да"), KeyboardButton(text="Нет")]
+            [KeyboardButton(text="Да"), KeyboardButton(text="Нет")],
+            [KeyboardButton(text="🏠 Вернуться в главное меню")]
         ],
         resize_keyboard=True
     )
     await message.answer(
-        'Есть ли у вас другие кредиты?',
+        'Есть ли у вас сейчас действующие кредиты (например, ипотека, автокредит, кредитная карта и т.д.)?\n(Если все кредиты уже погашены — отвечайте "Нет")',
         reply_markup=keyboard
     )
     await state.set_state(CreditStates.loan)
@@ -168,6 +202,10 @@ async def process_housing(message: types.Message, state: FSMContext):
 @router.message(CreditStates.loan)
 async def process_loan(message: types.Message, state: FSMContext):
     """Обрабатывает наличие других кредитов"""
+    if message.text == "🏠 Вернуться в главное меню":
+        await return_to_main_menu(message, state)
+        return
+    
     loan = 1 if message.text == "Да" else 0
     await state.update_data(loan=loan)
     
@@ -177,7 +215,8 @@ async def process_loan(message: types.Message, state: FSMContext):
             [KeyboardButton(text="Офисный работник")],
             [KeyboardButton(text="IT/Технологии")],
             [KeyboardButton(text="Сфера услуг")],
-            [KeyboardButton(text="Другое")]
+            [KeyboardButton(text="Другое")],
+            [KeyboardButton(text="🏠 Вернуться в главное меню")]
         ],
         resize_keyboard=True
     )
@@ -190,6 +229,10 @@ async def process_loan(message: types.Message, state: FSMContext):
 @router.message(CreditStates.job)
 async def process_job(message: types.Message, state: FSMContext):
     """Обрабатывает профессию"""
+    if message.text == "🏠 Вернуться в главное меню":
+        await return_to_main_menu(message, state)
+        return
+    
     job_type = message.text
     
     # Сбрасываем все категории профессий
@@ -218,7 +261,7 @@ async def process_job(message: types.Message, state: FSMContext):
         keyboard=[
             [KeyboardButton(text="Высшее")],
             [KeyboardButton(text="Среднее")],
-            [KeyboardButton(text="Базовое")]
+            [KeyboardButton(text="🏠 Вернуться в главное меню")]
         ],
         resize_keyboard=True
     )
@@ -231,13 +274,17 @@ async def process_job(message: types.Message, state: FSMContext):
 @router.message(CreditStates.education)
 async def process_education(message: types.Message, state: FSMContext):
     """Обрабатывает образование"""
+    if message.text == "🏠 Вернуться в главное меню":
+        await return_to_main_menu(message, state)
+        return
+    
     education = message.text
     
     # Сбрасываем все категории образования
     education_data = {
         '_higher': 0,
         '_secondary': 0,
-        '_basic': 0
+        '_low': 0
     }
     
     if education == 'Высшее':
@@ -245,28 +292,41 @@ async def process_education(message: types.Message, state: FSMContext):
     elif education == 'Среднее':
         education_data['_secondary'] = 1
     else:
-        education_data['_basic'] = 1
+        education_data['_low'] = 1
     
     await state.update_data(**education_data, education=education)
     
     await message.answer(
-        'Введите желаемую сумму кредита (в рублях):'
+        'Введите срок кредита в месяцах:',
+        reply_markup=get_menu_with_back_keyboard()
     )
     await state.set_state(CreditStates.duration)
 
 @router.message(CreditStates.duration)
 async def process_duration(message: types.Message, state: FSMContext):
-    """Обрабатывает сумму кредита"""
+    """Обрабатывает срок кредита"""
+    if message.text == "🏠 Вернуться в главное меню":
+        await return_to_main_menu(message, state)
+        return
+    
     try:
         duration = int(message.text)
-        if duration <= 0:
-            await message.answer('Пожалуйста, введите положительную сумму')
+        if duration <= 0 or duration > 120:
+            await message.answer('Пожалуйста, введите срок от 1 до 120 месяцев')
             return
         
         await state.update_data(duration=duration)
         
+        keyboard = ReplyKeyboardMarkup(
+            keyboard=[
+                [KeyboardButton(text="Да"), KeyboardButton(text="Нет")],
+                [KeyboardButton(text="🏠 Вернуться в главное меню")]
+            ],
+            resize_keyboard=True
+        )
         await message.answer(
-            'Введите срок кредита в месяцах:'
+            'Это ваш первый кредит в жизни?\n(Если вы когда-либо брали кредит, даже если сейчас у вас нет кредитов — отвечайте "Нет")',
+            reply_markup=keyboard
         )
         await state.set_state(CreditStates.campaign)
     except ValueError:
@@ -274,14 +334,35 @@ async def process_duration(message: types.Message, state: FSMContext):
 
 @router.message(CreditStates.campaign)
 async def process_campaign(message: types.Message, state: FSMContext):
-    """Обрабатывает срок кредита и завершает опрос"""
+    """Обрабатывает первый ли кредит"""
+    if message.text == "🏠 Вернуться в главное меню":
+        await return_to_main_menu(message, state)
+        return
+    
+    # campaign = 0 если первый кредит (Да), 1 если не первый (Нет)
+    campaign = 0 if message.text == "Да" else 1
+    await state.update_data(campaign=campaign)
+    
+    await message.answer(
+        'Введите желаемую сумму кредита (в рублях):',
+        reply_markup=get_menu_with_back_keyboard()
+    )
+    await state.set_state(CreditStates.loan_amount)
+
+@router.message(CreditStates.loan_amount)
+async def process_loan_amount(message: types.Message, state: FSMContext):
+    """Обрабатывает сумму кредита и завершает опрос"""
+    if message.text == "🏠 Вернуться в главное меню":
+        await return_to_main_menu(message, state)
+        return
+    
     try:
-        campaign = int(message.text)
-        if campaign <= 0 or campaign > 120:
-            await message.answer('Пожалуйста, введите срок от 1 до 120 месяцев')
+        amount = int(message.text)
+        if amount <= 0:
+            await message.answer('Пожалуйста, введите положительную сумму')
             return
         
-        await state.update_data(campaign=campaign)
+        await state.update_data(loan_amount=amount)
         
         # Получаем все данные
         data = await state.get_data()
@@ -302,13 +383,14 @@ async def process_campaign(message: types.Message, state: FSMContext):
 • Возраст: {data['age']}
 • Семейное положение: {'Женат/замужем' if data['marital'] else 'Холост/не замужем'}
 • Наличие жилья: {'Да' if data['housing'] else 'Нет'}
-• Другие кредиты: {'Да' if data['loan'] else 'Нет'}
+• Действующие кредиты: {'Да' if data['loan'] else 'Нет'}
 • Профессия: {data['job_category']}
 • Образование: {data['education']}
-• Сумма кредита: {data['duration']:,} ₽
-• Срок кредита: {data['campaign']} мес.
+• Срок кредита: {data['duration']} мес.
+• Первый кредит в жизни: {'Да' if data['campaign'] == 0 else 'Нет'}
+• Сумма кредита: {amount:,} ₽
 
-💡 Рекомендации:
+�� Рекомендации:
 """
         
         if probability >= 80:

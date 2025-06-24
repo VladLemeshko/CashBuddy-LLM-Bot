@@ -81,6 +81,7 @@ async def init_db():
                 education TEXT,
                 duration INTEGER,
                 campaign INTEGER,
+                loan_amount REAL,
                 credit_probability REAL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY(user_id) REFERENCES users(user_id)
@@ -93,12 +94,12 @@ async def save_credit_application(user_id: int, credit_data: dict, probability: 
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute('''
             INSERT INTO credit_applications 
-            (user_id, age, marital_status, housing, loan, job_category, education, duration, campaign, credit_probability)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            (user_id, age, marital_status, housing, loan, job_category, education, duration, campaign, loan_amount, credit_probability)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
             user_id, credit_data['age'], credit_data['marital'], credit_data['housing'],
             credit_data['loan'], credit_data['job_category'], credit_data['education'],
-            credit_data['duration'], credit_data['campaign'], probability
+            credit_data['duration'], credit_data['campaign'], credit_data['loan_amount'], probability
         ))
         await db.commit()
 

@@ -12,6 +12,7 @@ class GoalStates(StatesGroup):
     period = State()
     confirm_amount = State()
     priority = State()
+    edit_confirm_amount = State()
 
 class AskAgentState(StatesGroup):
     waiting_for_question = State()
@@ -28,4 +29,5 @@ class CreditStates(StatesGroup):
     job = State()
     education = State()
     duration = State()
-    campaign = State() 
+    campaign = State()
+    loan_amount = State() 

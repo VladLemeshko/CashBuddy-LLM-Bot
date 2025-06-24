@@ -10,16 +10,45 @@ from datetime import datetime, timedelta
 
 router = Router()
 
+# Клавиатура с кнопкой возврата в главное меню
+def get_menu_with_back_keyboard():
+    return ReplyKeyboardMarkup(
+        keyboard=[
+            [KeyboardButton(text="🏠 Вернуться в главное меню")]
+        ],
+        resize_keyboard=True
+    )
 
 @router.message(F.text == "🎯 Цели")
 async def show_goals(message: Message, state: FSMContext):
     user_id = message.from_user.id
+    print(f"DEBUG: Пользователь {user_id} запросил цели")
+    
     async with aiosqlite.connect(DB_PATH) as db:
         cursor = await db.execute("SELECT goal_name, target_amount, current_amount, deadline, period, strategy_value, priority FROM goals WHERE user_id=?", (user_id,))
         goals = await cursor.fetchall()
+        print(f"DEBUG: Найдено целей для пользователя {user_id}: {len(goals)}")
+        
+        # Подробная информация о каждой цели
+        for i, goal in enumerate(goals):
+            name, target, current, deadline, period, strategy, priority = goal
+            percent = int(min(100, (current / target) * 100)) if target else 0
+            print(f"DEBUG: Цель {i+1}: {name} - {current}/{target}₽ ({percent}%)")
+        
+        # Проверяем все цели в базе
+        cursor = await db.execute("SELECT user_id, goal_name, current_amount, target_amount FROM goals")
+        all_goals = await cursor.fetchall()
+        print(f"DEBUG: Всего целей в базе: {len(all_goals)}")
+        for g in all_goals:
+            print(f"DEBUG: User {g[0]}, Goal: {g[1]}, Current: {g[2]}, Target: {g[3]}")
+    
     kb = get_goals_list_inline_keyboard(goals)
     await message.answer("Выберите цель для управления или добавьте новую:", reply_markup=kb)
-    await state.set_state(GoalStates.name)
+
+@router.message(F.text == "🏠 Вернуться в главное меню")
+async def return_to_main_menu(message: Message, state: FSMContext):
+    await state.clear()
+    await message.answer("🏠 Вы вернулись в главное меню", reply_markup=main_menu)
 
 @router.callback_query(F.data == "goal_add_new")
 async def goal_add_new(call: CallbackQuery, state: FSMContext):
@@ -54,9 +83,9 @@ async def edit_goal_field(call: CallbackQuery, state: FSMContext):
     await state.update_data(edit_field=field)
     prompts = {"name": "Введите новое название:", "deadline": "Введите новый дедлайн (ГГГГ-ММ-ДД):", "amount": "Введите новую целевую сумму:"}
     await call.message.edit_text(prompts[field])
-    await state.set_state(GoalStates.confirm_amount)
+    await state.set_state(GoalStates.edit_confirm_amount)
 
-@router.message(GoalStates.confirm_amount)
+@router.message(GoalStates.edit_confirm_amount)
 async def save_edited_goal(message: Message, state: FSMContext):
     data = await state.get_data()
     goal_name = data.get("selected_goal")
@@ -96,17 +125,17 @@ async def goal_manage_back(call: CallbackQuery, state: FSMContext):
 
 @router.message(GoalStates.name)
 async def goal_set_name(message: Message, state: FSMContext):
-    if message.text.lower() == "отмена":
+    if message.text.lower() in ["отмена", "🏠 вернуться в главное меню"]:
         await state.clear()
         await message.answer("❌ Операция отменена.", reply_markup=main_menu)
         return
     await state.update_data(goal_name=message.text)
     await state.set_state(GoalStates.amount)
-    await message.answer("💰 Введите целевую сумму:")
+    await message.answer("💰 Введите целевую сумму:", reply_markup=get_menu_with_back_keyboard())
 
 @router.message(GoalStates.amount)
 async def goal_set_amount(message: Message, state: FSMContext):
-    if message.text.lower() == "отмена":
+    if message.text.lower() in ["отмена", "🏠 вернуться в главное меню"]:
         await state.clear()
         await message.answer("❌ Операция отменена.", reply_markup=main_menu)
         return
@@ -118,11 +147,11 @@ async def goal_set_amount(message: Message, state: FSMContext):
     await state.update_data(target_amount=amount)
     await state.set_state(GoalStates.deadline)
     today = datetime.now().strftime("%Y-%m-%d")
-    await message.answer(f"📅 Введите дедлайн (например, {today}):")
+    await message.answer(f"📅 Введите дедлайн (например, {today}):", reply_markup=get_menu_with_back_keyboard())
 
 @router.message(GoalStates.deadline)
 async def goal_set_deadline(message: Message, state: FSMContext):
-    if message.text.lower() == "отмена":
+    if message.text.lower() in ["отмена", "🏠 вернуться в главное меню"]:
         await state.clear()
         await message.answer("❌ Операция отменена.", reply_markup=main_menu)
         return
@@ -135,7 +164,7 @@ async def goal_set_deadline(message: Message, state: FSMContext):
 
 @router.message(GoalStates.period)
 async def goal_set_period(message: Message, state: FSMContext):
-    if message.text.lower() == "отмена":
+    if message.text.lower() in ["отмена", "🏠 вернуться в главное меню"]:
         await state.clear()
         await message.answer("❌ Операция отменена.", reply_markup=main_menu)
         return
@@ -177,7 +206,7 @@ async def goal_set_period(message: Message, state: FSMContext):
 
 @router.message(GoalStates.confirm_amount)
 async def goal_confirm_amount(message: Message, state: FSMContext):
-    if message.text.lower() == "отмена":
+    if message.text.lower() in ["отмена", "🏠 вернуться в главное меню"]:
         await state.clear()
         await message.answer("❌ Операция отменена.", reply_markup=main_menu)
         return
@@ -198,81 +227,52 @@ async def goal_confirm_amount(message: Message, state: FSMContext):
     if message.text.lower() in ["да", "ок", "yes"]:
         await state.update_data(strategy_value=recommended)
         await state.set_state(GoalStates.priority)
-        await message.answer("⭐️ Укажите приоритет цели (1 — обычная, 2 — важная, 3 — очень важная):", reply_markup=ReplyKeyboardRemove())
-        return
-    if message.text.lower() == "нет":
-        await message.answer("✏️ Пожалуйста, введите подходящую для вас сумму:", reply_markup=ReplyKeyboardRemove())
-        return
-    # Пользователь ввёл свою сумму
-    try:
-        value = float(message.text.replace(",", "."))
-    except ValueError:
-        await message.answer("⚠️ Пожалуйста, введите корректное число или выберите вариант на клавиатуре.")
-        return
-    # Считаем, сколько периодов потребуется с новой суммой
-    if value <= 0:
-        await message.answer("⚠️ Сумма должна быть больше нуля. Введите корректное число.")
-        return
-    if period == "ежедневно":
-        periods_needed = int((total // value) + (1 if total % value else 0))
-        new_date = today + timedelta(days=periods_needed)
-    elif period == "еженедельно":
-        periods_needed = int((total // value) + (1 if total % value else 0))
-        new_date = today + timedelta(weeks=periods_needed)
-    else:  # ежемесячно
-        periods_needed = int((total // value) + (1 if total % value else 0))
-        # Прибавляем месяцы
-        year = today.year
-        month = today.month
-        day = today.day
-        for _ in range(periods_needed):
-            month += 1
-            if month > 12:
-                month = 1
-                year += 1
-        # Корректируем день, если, например, 31 февраля
+        await message.answer("🎯 Выберите приоритет цели (1-5, где 1 - самый высокий):", reply_markup=get_menu_with_back_keyboard())
+    else:
         try:
-            new_date = datetime(year, month, day)
+            custom_amount = float(message.text.replace(",", "."))
+            await state.update_data(strategy_value=custom_amount)
+            await state.set_state(GoalStates.priority)
+            await message.answer("🎯 Выберите приоритет цели (1-5, где 1 - самый высокий):", reply_markup=get_menu_with_back_keyboard())
         except ValueError:
-            # Если такого дня нет, берём последний день месяца
-            import calendar
-            last_day = calendar.monthrange(year, month)[1]
-            new_date = datetime(year, month, last_day)
-    # Сравниваем с дедлайном
-    if value < recommended:
-        if new_date > deadline:
-            await message.answer(f"⚠️ Если вы будете откладывать по <b>{value:.2f}₽</b> {period}, вы накопите нужную сумму только к <b>{new_date.strftime('%Y-%m-%d')}</b>. Хотите сохранить эту сумму или изменить её? (Да/Нет, введите новую сумму)", reply_markup=confirm_amount_kb, parse_mode="HTML")
-            await state.update_data(strategy_value=value)
-            return
-    # Если сумма >= рекомендованной или цель достижима к дедлайну
-    await state.update_data(strategy_value=value)
-    await state.set_state(GoalStates.priority)
-    await message.answer("⭐️ Укажите приоритет цели (1 — обычная, 2 — важная, 3 — очень важная):", reply_markup=ReplyKeyboardRemove())
+            await message.answer("⚠️ Пожалуйста, введите корректную сумму или 'Да' для подтверждения.")
 
 @router.message(GoalStates.priority)
 async def goal_set_priority(message: Message, state: FSMContext):
-    if message.text.lower() == "отмена":
+    if message.text.lower() in ["отмена", "🏠 вернуться в главное меню"]:
         await state.clear()
         await message.answer("❌ Операция отменена.", reply_markup=main_menu)
         return
     try:
         priority = int(message.text)
-        if priority not in [1, 2, 3]:
-            raise ValueError
+        if priority < 1 or priority > 5:
+            await message.answer("⚠️ Приоритет должен быть от 1 до 5.")
+            return
     except ValueError:
-        await message.answer("⚠️ Пожалуйста, введите 1, 2 или 3.")
+        await message.answer("⚠️ Пожалуйста, введите число от 1 до 5.")
         return
     data = await state.get_data()
     user_id = message.from_user.id
-    # Сохраняем period, strategy_value, priority
+    print(f"DEBUG: Создание цели для пользователя {user_id}")
+    print(f"DEBUG: Данные цели: {data}")
+    
     async with aiosqlite.connect(DB_PATH) as db:
+        # Проверяем, есть ли пользователь
+        cursor = await db.execute("SELECT user_id FROM users WHERE user_id=?", (user_id,))
+        user_exists = await cursor.fetchone()
+        if not user_exists:
+            print(f"DEBUG: Создаем пользователя {user_id}")
+            await db.execute("INSERT INTO users (user_id) VALUES (?)", (user_id,))
+            await db.commit()
+        
         await db.execute(
             "INSERT INTO goals (user_id, goal_name, target_amount, deadline, period, strategy_value, priority) VALUES (?, ?, ?, ?, ?, ?, ?)",
             (user_id, data["goal_name"], data["target_amount"], data["deadline"], data["period"], data["strategy_value"], priority)
         )
         await db.commit()
+        print(f"DEBUG: Цель успешно создана для пользователя {user_id}")
     await state.clear()
-    await message.answer("🎉 Цель успешно добавлена! Пусть ваши мечты сбываются!", reply_markup=main_menu)
+    await message.answer("✅ Цель успешно создана!", reply_markup=main_menu)
 
 @router.message(F.text == "Пополнить цель")
 async def ask_goal_to_deposit(message: Message, state: FSMContext):
@@ -406,34 +406,37 @@ async def ask_goal_to_edit(message: Message, state: FSMContext):
 
 @router.message(GoalDepositStates.waiting_for_amount)
 async def deposit_goal_custom_amount(message: Message, state: FSMContext):
+    if message.text.lower() in ["отмена", "🏠 вернуться в главное меню"]:
+        await state.clear()
+        await message.answer("❌ Операция отменена.", reply_markup=main_menu)
+        return
     try:
-        value = float(message.text.replace(",", "."))
-        if value <= 0:
-            raise ValueError
+        amount = float(message.text.replace(",", "."))
     except ValueError:
-        await message.answer("⚠️ Пожалуйста, введите корректную сумму для пополнения.")
+        await message.answer("⚠️ Пожалуйста, введите корректную сумму.")
         return
     data = await state.get_data()
-    goal_name = data.get("selected_goal", "").strip()
+    goal_name = data.get("selected_goal")
     user_id = message.from_user.id
     async with aiosqlite.connect(DB_PATH) as db:
-        cursor = await db.execute(
-            "SELECT id FROM goals WHERE user_id=? AND TRIM(goal_name)=?",
-            (user_id, goal_name)
-        )
-        row = await cursor.fetchone()
-        if not row:
+        # Получаем goal_id
+        cursor = await db.execute("SELECT id, current_amount FROM goals WHERE user_id=? AND goal_name=?", (user_id, goal_name))
+        goal_data = await cursor.fetchone()
+        if goal_data:
+            goal_id, current_amount = goal_data
+            new_amount = current_amount + amount
+            # Обновляем текущую сумму цели
+            await db.execute("UPDATE goals SET current_amount=? WHERE id=?", (new_amount, goal_id))
+            # Записываем пополнение
+            await db.execute("INSERT INTO goal_deposits (goal_id, user_id, amount, date, source) VALUES (?, ?, ?, ?, ?)", 
+                           (goal_id, user_id, amount, datetime.now().strftime("%Y-%m-%d"), "manual"))
+            await db.commit()
             await state.clear()
-            await message.answer("⚠️ Не удалось найти цель. Попробуйте ещё раз.", reply_markup=main_menu)
-            return
-        goal_id = row[0]
-        await db.execute("UPDATE goals SET current_amount = current_amount + ? WHERE id=?", (value, goal_id))
-        await db.execute("INSERT INTO goal_deposits (goal_id, user_id, amount, date, source) VALUES (?, ?, ?, DATE('now'), ?) ", (goal_id, user_id, value, "доход"))
-        await db.commit()
-        cursor = await db.execute("SELECT current_amount, target_amount FROM goals WHERE id=?", (goal_id,))
-        current, target = await cursor.fetchone()
-    await state.clear()
-    await message.answer(f"🎉 Пополнение цели <b>{goal_name}</b> на {value:.2f}₽ успешно!", parse_mode="HTML", reply_markup=main_menu)
+            await message.answer(f"✅ Цель <b>{goal_name}</b> пополнена на {amount:.2f}₽! Текущая сумма: {new_amount:.2f}₽", 
+                               parse_mode="HTML", reply_markup=main_menu)
+        else:
+            await message.answer("❌ Цель не найдена.", reply_markup=main_menu)
+            await state.clear()
 
 # Красивый вывод целей
 async def pretty_goals_list(user_id):

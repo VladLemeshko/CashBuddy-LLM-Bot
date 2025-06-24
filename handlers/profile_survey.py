@@ -26,6 +26,20 @@ class ProfileSurvey(StatesGroup):
     waiting_for_regular_payments = State()
     waiting_for_regular_payments_details = State()
 
+# Клавиатура с кнопкой возврата в главное меню
+def get_menu_with_back_keyboard():
+    return ReplyKeyboardMarkup(
+        keyboard=[
+            [KeyboardButton(text="🏠 Вернуться в главное меню")]
+        ],
+        resize_keyboard=True
+    )
+
+@router.message(F.text == "🏠 Вернуться в главное меню")
+async def return_to_main_menu(message: types.Message, state: FSMContext):
+    await state.clear()
+    await message.answer("🏠 Вы вернулись в главное меню", reply_markup=main_menu)
+
 # Клавиатуры
 start_survey_kb = ReplyKeyboardMarkup(
     keyboard=[[KeyboardButton(text="Начать")], [KeyboardButton(text="Пропустить")]],
@@ -37,11 +51,16 @@ income_type_kb = ReplyKeyboardMarkup(
         [KeyboardButton(text="Нерегулярный доход")],
         [KeyboardButton(text="Доход от бизнеса")],
         [KeyboardButton(text="Нет постоянного дохода")],
+        [KeyboardButton(text="🏠 Вернуться в главное меню")]
     ],
     resize_keyboard=True
 )
 has_deposits_kb = ReplyKeyboardMarkup(
-    keyboard=[[KeyboardButton(text="Да")], [KeyboardButton(text="Нет")]],
+    keyboard=[
+        [KeyboardButton(text="Да")], 
+        [KeyboardButton(text="Нет")],
+        [KeyboardButton(text="🏠 Вернуться в главное меню")]
+    ],
     resize_keyboard=True
 )
 has_loans_kb = has_deposits_kb
@@ -51,6 +70,7 @@ financial_mood_kb = ReplyKeyboardMarkup(
         [KeyboardButton(text="Всё отлично, всё под контролем!")],
         [KeyboardButton(text="Могло бы быть лучше, хочу больше порядка")],
         [KeyboardButton(text="Есть сложности, хочу разобраться")],
+        [KeyboardButton(text="🏠 Вернуться в главное меню")]
     ],
     resize_keyboard=True
 )
@@ -82,13 +102,21 @@ async def survey_entry(message: types.Message, state: FSMContext):
 # 1. Тип дохода
 @router.message(ProfileSurvey.waiting_for_income_type)
 async def income_type_q(message: types.Message, state: FSMContext):
+    if message.text == "🏠 Вернуться в главное меню":
+        await return_to_main_menu(message, state)
+        return
+    
     await state.update_data(income_type=message.text)
-    await message.answer("2️⃣ Какой у тебя средний доход в месяц?\n(Напиши сумму в рублях, например: 50000)", reply_markup=ReplyKeyboardRemove())
+    await message.answer("2️⃣ Какой у тебя средний доход в месяц?\n(Напиши сумму в рублях, например: 50000)", reply_markup=get_menu_with_back_keyboard())
     await state.set_state(ProfileSurvey.waiting_for_monthly_income)
 
 # 2. Доход
 @router.message(ProfileSurvey.waiting_for_monthly_income)
 async def monthly_income_q(message: types.Message, state: FSMContext):
+    if message.text == "🏠 Вернуться в главное меню":
+        await return_to_main_menu(message, state)
+        return
+    
     try:
         income = float(message.text.replace(',', '.'))
     except ValueError:
@@ -101,10 +129,14 @@ async def monthly_income_q(message: types.Message, state: FSMContext):
 # 3. Вклады/накопления
 @router.message(ProfileSurvey.waiting_for_has_deposits)
 async def has_deposits_q(message: types.Message, state: FSMContext):
+    if message.text == "🏠 Вернуться в главное меню":
+        await return_to_main_menu(message, state)
+        return
+    
     has_deposits = 1 if message.text == "Да" else 0
     await state.update_data(has_deposits=has_deposits)
     if has_deposits:
-        await message.answer("🏦 В каком банке у тебя открыт вклад?")
+        await message.answer("🏦 В каком банке у тебя открыт вклад?", reply_markup=get_menu_with_back_keyboard())
         await state.set_state(ProfileSurvey.waiting_for_deposit_bank)
     else:
         await state.update_data(
@@ -119,38 +151,58 @@ async def has_deposits_q(message: types.Message, state: FSMContext):
 
 @router.message(ProfileSurvey.waiting_for_deposit_bank)
 async def deposit_bank_q(message: types.Message, state: FSMContext):
+    if message.text == "🏠 Вернуться в главное меню":
+        await return_to_main_menu(message, state)
+        return
+    
     await state.update_data(deposit_bank=message.text)
-    await message.answer("📈 Какой процент по вкладу?")
+    await message.answer("📈 Какой процент по вкладу?", reply_markup=get_menu_with_back_keyboard())
     await state.set_state(ProfileSurvey.waiting_for_deposit_interest)
 
 @router.message(ProfileSurvey.waiting_for_deposit_interest)
 async def deposit_interest_q(message: types.Message, state: FSMContext):
+    if message.text == "🏠 Вернуться в главное меню":
+        await return_to_main_menu(message, state)
+        return
+    
     try:
         percent = float(message.text.replace(',', '.'))
         await state.update_data(deposit_interest=percent)
-        await message.answer("💵 Какая сумма на вкладе?")
+        await message.answer("💵 Какая сумма на вкладе?", reply_markup=get_menu_with_back_keyboard())
         await state.set_state(ProfileSurvey.waiting_for_deposit_amount)
     except ValueError:
         await message.answer("Пожалуйста, введи процент числом, например: 7.5")
 
 @router.message(ProfileSurvey.waiting_for_deposit_amount)
 async def deposit_amount_q(message: types.Message, state: FSMContext):
+    if message.text == "🏠 Вернуться в главное меню":
+        await return_to_main_menu(message, state)
+        return
+    
     try:
         amount = float(message.text.replace(',', '.'))
         await state.update_data(deposit_amount=amount)
-        await message.answer("⏳ На какой срок открыт вклад? (например, 6 месяцев, 1 год)")
+        await message.answer("⏳ На какой срок открыт вклад? (например, 6 месяцев, 1 год)", reply_markup=get_menu_with_back_keyboard())
         await state.set_state(ProfileSurvey.waiting_for_deposit_term)
     except ValueError:
         await message.answer("Пожалуйста, введи сумму числом, например: 100000")
 
 @router.message(ProfileSurvey.waiting_for_deposit_term)
 async def deposit_term_q(message: types.Message, state: FSMContext):
+    if message.text == "🏠 Вернуться в главное меню":
+        await return_to_main_menu(message, state)
+        return
+    
     await state.update_data(deposit_term=message.text)
-    await message.answer("📅 Когда ты открыл вклад? (или когда он заканчивается)")
+    await message.answer("📅 Когда ты открыл вклад? (или когда он заканчивается)", reply_markup=get_menu_with_back_keyboard())
     await state.set_state(ProfileSurvey.waiting_for_deposit_date)
 
 @router.message(ProfileSurvey.waiting_for_deposit_date)
 async def deposit_date_q(message: types.Message, state: FSMContext):
+    if message.text == "🏠 Вернуться в главное меню":
+        await return_to_main_menu(message, state)
+        return
+    
     await state.update_data(deposit_date=message.text)
     await message.answer("4️⃣ Есть ли у тебя кредиты, рассрочки или долги?\n(Это поможет мне оценить твою кредитную нагрузку 🏦)", reply_markup=has_loans_kb)
     await state.set_state(ProfileSurvey.waiting_for_has_loans)
@@ -158,10 +210,14 @@ async def deposit_date_q(message: types.Message, state: FSMContext):
 # 4. Кредиты/долги
 @router.message(ProfileSurvey.waiting_for_has_loans)
 async def has_loans_q(message: types.Message, state: FSMContext):
+    if message.text == "🏠 Вернуться в главное меню":
+        await return_to_main_menu(message, state)
+        return
+    
     has_loans = 1 if message.text == "Да" else 0
     await state.update_data(has_loans=has_loans)
     if has_loans:
-        await message.answer("💳 Какой общий остаток по кредитам/долгам?\n(В рублях, например: 150000)", reply_markup=ReplyKeyboardRemove())
+        await message.answer("💳 Какой общий остаток по кредитам/долгам?\n(В рублях, например: 150000)", reply_markup=get_menu_with_back_keyboard())
         await state.set_state(ProfileSurvey.waiting_for_loans_details)
     else:
         await state.update_data(loans_total=None, loans_interest=None)
@@ -170,12 +226,16 @@ async def has_loans_q(message: types.Message, state: FSMContext):
 
 @router.message(ProfileSurvey.waiting_for_loans_details)
 async def loans_details_q(message: types.Message, state: FSMContext):
+    if message.text == "🏠 Вернуться в главное меню":
+        await return_to_main_menu(message, state)
+        return
+    
     data = await state.get_data()
     if data.get('loans_total') is None:
         try:
             total = float(message.text.replace(',', '.'))
             await state.update_data(loans_total=total)
-            await message.answer("📈 Какой средний процент по кредитам?\n(Напиши число, например: 12.5)")
+            await message.answer("📈 Какой средний процент по кредитам?\n(Напиши число, например: 12.5)", reply_markup=get_menu_with_back_keyboard())
         except ValueError:
             await message.answer("Пожалуйста, введи сумму числом, например: 150000")
             return
@@ -191,10 +251,14 @@ async def loans_details_q(message: types.Message, state: FSMContext):
 # 5. Инвестиции
 @router.message(ProfileSurvey.waiting_for_has_investments)
 async def has_investments_q(message: types.Message, state: FSMContext):
+    if message.text == "🏠 Вернуться в главное меню":
+        await return_to_main_menu(message, state)
+        return
+    
     has_investments = 1 if message.text == "Да" else 0
     await state.update_data(has_investments=has_investments)
     if has_investments:
-        await message.answer("💹 Какой примерный объём твоих инвестиций?\n(В рублях, например: 50000)", reply_markup=ReplyKeyboardRemove())
+        await message.answer("💹 Какой примерный объём твоих инвестиций?\n(В рублях, например: 50000)", reply_markup=get_menu_with_back_keyboard())
         await state.set_state(ProfileSurvey.waiting_for_investments_details)
     else:
         await state.update_data(investments_amount=None, investments_profit=None)

@@ -106,7 +106,10 @@ def get_goals_list_inline_keyboard(goals):
                 days_str = f"⏳ {days_left} дн."
         except Exception:
             days_str = deadline
-        percent = int(min(100, (current_amount / target_amount) * 100)) if target_amount else 0
+        percent = round(min(100, (current_amount / target_amount) * 100)) if target_amount else 0
+        # Показываем минимум 1% если есть прогресс, но он меньше 1%
+        if percent == 0 and current_amount > 0:
+            percent = 1
         btn_text = f"{name} | {days_str} | {percent}%"
         keyboard.append([InlineKeyboardButton(text=btn_text, callback_data=f"goal_action:{name}")])
     keyboard.append([InlineKeyboardButton(text="➕ Добавить новую цель", callback_data="goal_add_new")])

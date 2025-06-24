@@ -1,5 +1,5 @@
 from aiogram import Router, F
-from aiogram.types import Message, CallbackQuery
+from aiogram.types import Message, CallbackQuery, ReplyKeyboardMarkup, KeyboardButton
 from aiogram.fsm.context import FSMContext
 from keyboards import income_categories_kb, expense_categories_kb, main_menu
 from keyboards.expense_categories import get_expense_categories_inline_keyboard, EXPENSE_CATEGORIES
@@ -10,6 +10,20 @@ import aiosqlite
 from .states import AddTransaction, GoalDepositStates
 
 router = Router()
+
+# Клавиатура с кнопкой возврата в главное меню
+def get_menu_with_back_keyboard():
+    return ReplyKeyboardMarkup(
+        keyboard=[
+            [KeyboardButton(text="🏠 Вернуться в главное меню")]
+        ],
+        resize_keyboard=True
+    )
+
+@router.message(F.text == "🏠 Вернуться в главное меню")
+async def return_to_main_menu(message: Message, state: FSMContext):
+    await state.clear()
+    await message.answer("🏠 Вы вернулись в главное меню", reply_markup=main_menu)
 
 @router.message(F.text == "➕ Добавить доход")
 async def add_income_start(message: Message, state: FSMContext):
@@ -27,7 +41,7 @@ async def add_expense_start(message: Message, state: FSMContext):
 
 @router.message(AddTransaction.amount)
 async def save_transaction(message: Message, state: FSMContext):
-    if message.text == "Отмена":
+    if message.text.lower() in ["отмена", "🏠 вернуться в главное меню"]:
         await state.clear()
         await message.answer("❌ Операция отменена.", reply_markup=main_menu)
         return
@@ -84,7 +98,7 @@ async def save_transaction(message: Message, state: FSMContext):
 
 @router.message(GoalDepositStates.waiting_for_goal)
 async def choose_goal_to_deposit(message: Message, state: FSMContext):
-    if message.text.lower() == "нет":
+    if message.text.lower() in ["нет", "🏠 вернуться в главное меню"]:
         await state.clear()
         await message.answer("👌 Хорошо! Если захотите пополнить цель — выберите её в разделе целей.", reply_markup=main_menu)
         return
@@ -101,11 +115,11 @@ async def choose_goal_to_deposit(message: Message, state: FSMContext):
             rec = rec_val
             break
     await state.set_state(GoalDepositStates.waiting_for_amount)
-    await message.answer(f"💰 Введите сумму для пополнения цели <b>{message.text}</b> (рекомендуем: {rec:.2f}₽):", parse_mode="HTML")
+    await message.answer(f"💰 Введите сумму для пополнения цели <b>{message.text}</b> (рекомендуем: {rec:.2f}₽):", parse_mode="HTML", reply_markup=get_menu_with_back_keyboard())
 
 @router.message(GoalDepositStates.waiting_for_amount)
 async def deposit_goal_amount(message: Message, state: FSMContext):
-    if message.text.lower() == "отмена":
+    if message.text.lower() in ["отмена", "🏠 вернуться в главное меню"]:
         await state.clear()
         await message.answer("❌ Операция отменена.", reply_markup=main_menu)
         return
@@ -150,6 +164,7 @@ async def choose_expense_category(call: CallbackQuery, state: FSMContext):
     await state.update_data(category=category, type="expense")
     await state.set_state(AddTransaction.amount)
     await call.message.edit_text(f"Вы выбрали категорию. Введите сумму:")
+    await call.message.answer("Введите сумму:", reply_markup=get_menu_with_back_keyboard())
 
 @router.callback_query(F.data == "expense_cat_cancel", AddTransaction.category)
 async def cancel_expense_category(call: CallbackQuery, state: FSMContext):
@@ -169,6 +184,7 @@ async def choose_income_category(call: CallbackQuery, state: FSMContext):
     await state.update_data(category=code, type="income")
     await state.set_state(AddTransaction.amount)
     await call.message.edit_text(f"Вы выбрали категорию. Введите сумму:")
+    await call.message.answer("Введите сумму:", reply_markup=get_menu_with_back_keyboard())
 
 @router.callback_query(F.data == "income_cat_cancel", AddTransaction.category)
 async def cancel_income_category(call: CallbackQuery, state: FSMContext):
