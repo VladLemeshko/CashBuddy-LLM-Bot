@@ -171,7 +171,7 @@ async def process_marital(message: types.Message, state: FSMContext):
         resize_keyboard=True
     )
     await message.answer(
-        'Есть ли у вас сейчас действующие кредиты (например, ипотека, автокредит, кредитная карта и т.д.)?\n(Если все кредиты уже погашены — отвечайте "Нет")',
+        'Есть ли у вас жилье в собственности?',
         reply_markup=keyboard
     )
     await state.set_state(CreditStates.housing)
